@@ -489,6 +489,13 @@ class LoadUnitS0(param: ExeUnitParams)(
   XSPerfAccumulate("software_prefetch_fire", io.ldin.fire && LSUOpType.isPrefetch(io.ldin.bits.fuOpType))
   XSPerfAccumulate("hardware_prefetch_block", io.prefetchReq.valid && !io.prefetchReq.ready)
   XSPerfAccumulate("hardware_prefetch_total", io.prefetchReq.valid)
+  for (i <- 0 until LoadEntrance.num) {
+    val sourceName = LoadEntrance.findNameById(i)
+    val sourceSelected = sink.valid && sink.bits.entrance(i)
+    val sourceFire = pipeIn.fire && pipeIn.bits.entrance(i)
+    XSPerfAccumulate(s"util_${sourceName}_selected", sourceSelected)
+    XSPerfAccumulate(s"util_${sourceName}_fire", sourceFire)
+  }
   val perfEvents = Seq(
     ("s0_in_fire", pipeIn.fire),
     ("s0_stall_dcache", sink.valid && !io.dcacheReq.ready)
@@ -1986,6 +1993,33 @@ class NewLoadUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
   io.dcache.s0_pc := s0.io.debugInfo.pc
   io.dcache.s1_pc := s1.io.debugInfo.pc
   io.dcache.s2_pc := s2.io.debugInfo.pc
+
+  val utilInputValid = io.ldin.valid || io.vecldin.valid || io.replay.valid || io.prefetchReq.valid || s3.io.fastReplay.valid
+  val utilPipeBusy = utilInputValid ||
+    s0.io_pipeOut.get.valid ||
+    s1.io_pipeOut.get.valid ||
+    s2.io_pipeOut.get.valid ||
+    s3.io_pipeOut.get.valid ||
+    s4.io_pipeIn.get.valid
+  val utilInputFire = io.ldin.fire || io.vecldin.fire || io.replay.fire || io.prefetchReq.fire || s3.io.fastReplay.fire
+  val utilReplayFire = io.replay.fire || s3.io.fastReplay.fire
+  val utilWbFire = io.ldout.toRob.fire || io.vecldout.fire
+  val utilWbBlocked = io.ldout.toRob.valid && !io.ldout.toRob.ready || io.vecldout.valid && !io.vecldout.ready
+  XSPerfAccumulate("util_busy_cycle", utilPipeBusy)
+  XSPerfAccumulate("util_idle_cycle", !utilPipeBusy)
+  XSPerfAccumulate("util_input_valid", utilInputValid)
+  XSPerfAccumulate("util_input_fire", utilInputFire)
+  XSPerfAccumulate("util_input_blocked", utilInputValid && !utilInputFire)
+  XSPerfAccumulate("util_scalar_fire", io.ldin.fire)
+  XSPerfAccumulate("util_vector_fire", io.vecldin.fire)
+  XSPerfAccumulate("util_replay_fire", utilReplayFire)
+  XSPerfAccumulate("util_prefetch_fire", io.prefetchReq.fire)
+  XSPerfAccumulate("util_dcache_req_stall", io.dcache.req.valid && !io.dcache.req.ready)
+  XSPerfAccumulate("util_tlb_req_stall", io.tlb.req.valid && !io.tlb.req.ready)
+  XSPerfAccumulate("util_scalar_wb_fire", io.ldout.toRob.fire)
+  XSPerfAccumulate("util_vector_wb_fire", io.vecldout.fire)
+  XSPerfAccumulate("util_wb_fire", utilWbFire)
+  XSPerfAccumulate("util_wb_blocked", utilWbBlocked)
 
   val perfEvents = stages.collect { case stage if stage.isInstanceOf[HasPerfEvents] =>
     stage.asInstanceOf[HasPerfEvents]

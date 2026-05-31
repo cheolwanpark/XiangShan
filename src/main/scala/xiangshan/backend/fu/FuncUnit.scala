@@ -150,6 +150,13 @@ abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSMod
   io.out.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtBypassVal.id.U, io.out.valid, clock, reset))
   val criticalErrors = Seq(("none", false.B))
 
+  XSPerfAccumulate(s"fu_${cfg.name}_in_valid", io.in.valid)
+  XSPerfAccumulate(s"fu_${cfg.name}_in_fire", io.in.fire)
+  XSPerfAccumulate(s"fu_${cfg.name}_in_block", io.in.valid && !io.in.ready)
+  XSPerfAccumulate(s"fu_${cfg.name}_out_valid", io.out.valid)
+  XSPerfAccumulate(s"fu_${cfg.name}_out_fire", io.out.fire)
+  XSPerfAccumulate(s"fu_${cfg.name}_out_block", io.out.valid && !io.out.ready)
+
   // should only be used in non-piped fu
   def connectNonPipedCtrlSingal: Unit = {
     io.out.bits.ctrl.toRobValid := RegEnable(io.in.bits.ctrl.toRobValid, io.in.fire)
@@ -280,6 +287,11 @@ trait HasPipelineReg { this: FuncUnit =>
   val fixPerfVec = fixpipeReg.map(_.perfDebugInfo)
   val fixSeqNumVec = fixpipeReg.map(_.debug_seqNum)
   val pcVec = fixDataVec.map(_.pc)
+
+  private val pipeBusyVec = validVecThisFu.drop(1) ++ fixValidVec
+  private val pipeBusy = Cat(pipeBusyVec).orR
+  XSPerfAccumulate(s"fu_${cfg.name}_pipe_busy_cycle", pipeBusy)
+  XSPerfAccumulate(s"fu_${cfg.name}_pipe_idle_cycle", !pipeBusy && !io.in.valid)
 
   io.in.ready := fixRdyVec.head
   io.out.valid := fixValidVec.last

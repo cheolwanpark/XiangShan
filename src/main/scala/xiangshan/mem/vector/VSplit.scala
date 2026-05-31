@@ -276,6 +276,12 @@ class VSplitPipeline(param: ExeUnitParams, isVStore: Boolean = false)(implicit p
   XSPerfAccumulate("split_out",     io.out.fire)
   XSPerfAccumulate("pipe_block",    io.out.valid && !io.out.ready)
   XSPerfAccumulate("mbuffer_block", s1_valid && io.out.ready && !io.toMergeBuffer.resp.valid)
+  XSPerfAccumulate("util_busy_cycle", io.in.valid || s1_valid)
+  XSPerfAccumulate("util_idle_cycle", !io.in.valid && !s1_valid)
+  XSPerfAccumulate("util_input_fire", io.in.fire)
+  XSPerfAccumulate("util_input_blocked", io.in.valid && !io.in.ready)
+  XSPerfAccumulate("util_output_fire", io.out.fire)
+  XSPerfAccumulate("util_output_blocked", io.out.valid && !io.out.ready)
 }
 
 abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) extends VLSUModule{
@@ -460,6 +466,13 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
   XSPerfAccumulate("out_fire_unitstride",   io.out.fire && !issuePreIsSplit)
   XSPerfAccumulate("unitstride_vlenAlign",  io.out.fire && !issuePreIsSplit && getCheckAddrLowBits(io.out.bits.vaddr, maxMemByteNum) === 0.U)
   XSPerfAccumulate("unitstride_invalid",    io.out.ready && issueValid && !issuePreIsSplit && PopCount(io.out.bits.mask).orR)
+  XSPerfAccumulate("util_busy_cycle", allocated || io.in.valid)
+  XSPerfAccumulate("util_idle_cycle", !allocated && !io.in.valid)
+  XSPerfAccumulate("util_input_fire", io.in.fire)
+  XSPerfAccumulate("util_input_blocked", io.in.valid && !io.in.ready)
+  XSPerfAccumulate("util_output_fire", io.out.fire)
+  XSPerfAccumulate("util_output_blocked", io.out.valid && !io.out.ready)
+  XSPerfAccumulate("util_inactive_issue", inActiveIssue)
 }
 
 class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = true){
@@ -565,4 +578,3 @@ class VSSplitImp(val param: ExeUnitParams)(implicit p: Parameters) extends VLSUM
   io.out <> splitBuffer.io.out
   io.vstd.get <> splitBuffer.io.vstd.get
 }
-

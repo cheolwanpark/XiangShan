@@ -388,6 +388,20 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
    }
 
   QueuePerf(uopSize, freeList.io.validCount, freeList.io.validCount === 0.U)
+  val utilAnyAllocated = allocated.asUInt.orR
+  val utilSplitReqValid = Cat(io.fromSplit.map(_.req.valid)).orR
+  val utilPipeWbValid = Cat(io.fromPipeline.map(_.valid)).orR
+  val utilFinalWbValid = Cat(io.uopWriteback.map(_.valid)).orR
+  XSPerfAccumulate("util_busy_cycle", utilAnyAllocated || utilSplitReqValid || utilPipeWbValid || utilFinalWbValid)
+  XSPerfAccumulate("util_idle_cycle", !utilAnyAllocated && !utilSplitReqValid && !utilPipeWbValid && !utilFinalWbValid)
+  XSPerfAccumulate("util_allocated_entries", PopCount(allocated))
+  XSPerfAccumulate("util_freelist_valid_count", freeList.io.validCount)
+  XSPerfAccumulate("util_split_enq_fire", PopCount(io.fromSplit.map(_.req.fire)))
+  XSPerfAccumulate("util_split_enq_stall", PopCount(io.fromSplit.map(x => x.req.valid && !x.req.ready)))
+  XSPerfAccumulate("util_pipeline_wb_valid", PopCount(io.fromPipeline.map(_.valid)))
+  XSPerfAccumulate("util_pipeline_wb_fire", PopCount(io.fromPipeline.map(_.fire)))
+  XSPerfAccumulate("util_final_wb_fire", PopCount(io.uopWriteback.map(_.fire)))
+  XSPerfAccumulate("util_final_wb_blocked", PopCount(io.uopWriteback.map(x => x.valid && !x.ready)))
 }
 
 class VLMergeBufferImp(implicit p: Parameters) extends BaseVMergeBuffer(isVStore=false){
