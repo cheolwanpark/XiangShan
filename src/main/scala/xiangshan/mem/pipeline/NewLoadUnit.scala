@@ -2004,7 +2004,7 @@ class NewLoadUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
   val utilInputFire = io.ldin.fire || io.vecldin.fire || io.replay.fire || io.prefetchReq.fire || s3.io.fastReplay.fire
   val utilReplayFire = io.replay.fire || s3.io.fastReplay.fire
   val utilWbFire = io.ldout.toRob.fire || io.vecldout.fire
-  val utilWbBlocked = io.ldout.toRob.valid && !io.ldout.toRob.ready || io.vecldout.valid && !io.vecldout.ready
+  val utilWbBlocked = io.vecldout.valid && !io.vecldout.ready
   XSPerfAccumulate("util_busy_cycle", utilPipeBusy)
   XSPerfAccumulate("util_idle_cycle", !utilPipeBusy)
   XSPerfAccumulate("util_input_valid", utilInputValid)
