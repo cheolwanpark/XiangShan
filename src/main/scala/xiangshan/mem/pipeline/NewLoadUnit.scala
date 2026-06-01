@@ -491,8 +491,12 @@ class LoadUnitS0(param: ExeUnitParams)(
   XSPerfAccumulate("hardware_prefetch_total", io.prefetchReq.valid)
   for (i <- 0 until LoadEntrance.num) {
     val sourceName = LoadEntrance.findNameById(i)
+    val sourceValid = sources(i).valid
+    val sourceBlocked = sources(i).valid && !sources(i).ready
     val sourceSelected = sink.valid && sink.bits.entrance(i)
     val sourceFire = pipeIn.fire && pipeIn.bits.entrance(i)
+    XSPerfAccumulate(s"util_${sourceName}_valid", sourceValid)
+    XSPerfAccumulate(s"util_${sourceName}_blocked", sourceBlocked)
     XSPerfAccumulate(s"util_${sourceName}_selected", sourceSelected)
     XSPerfAccumulate(s"util_${sourceName}_fire", sourceFire)
   }

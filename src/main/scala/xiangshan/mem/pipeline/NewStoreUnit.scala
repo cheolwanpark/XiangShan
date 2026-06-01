@@ -259,6 +259,18 @@ class StoreUnitS0(param: ExeUnitParams)(
   XSPerfAccumulate("s0_unalign", fire && !pipeIn.bits.align.get)
   XSPerfAccumulate("s0_cross16Byte", fire && pipeIn.bits.unalignHead.get)
   XSPerfAccumulate("s0_cross4KPage", fire && !isUnalignTail && pipeIn.bits.cross4KPage.get)
+  val sourcesByEntrance = Seq(unalignTail, prefetchReq, vectorIssue, scalarIssue)
+  for (i <- 0 until StoreEntrance.num) {
+    val sourceName = StoreEntrance.findNameById(i)
+    val sourceValid = sourcesByEntrance(i).valid
+    val sourceBlocked = sourcesByEntrance(i).valid && !sourcesByEntrance(i).ready
+    val sourceSelected = sink.valid && sink.bits.entrance(i)
+    val sourceFire = pipeIn.fire && pipeIn.bits.entrance(i)
+    XSPerfAccumulate(s"util_${sourceName}_valid", sourceValid)
+    XSPerfAccumulate(s"util_${sourceName}_blocked", sourceBlocked)
+    XSPerfAccumulate(s"util_${sourceName}_selected", sourceSelected)
+    XSPerfAccumulate(s"util_${sourceName}_fire", sourceFire)
+  }
 }
 
 class StoreUnitS1(param: ExeUnitParams)(
@@ -962,6 +974,34 @@ class NewStoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSM
   io.stout := s3.io.stout
   io.vecstout <> s3.io.vecstout
   io.exceptionInfo := s3.io.exceptionInfo
+
+  val utilInputValid = io.stin.valid || io.vecstin.valid || io.prefetchReq.valid || s1.io.unalignTail.valid
+  val utilPipeBusy = utilInputValid ||
+    s0.io_pipeOut.get.valid ||
+    s1.io_pipeOut.get.valid ||
+    s2.io_pipeOut.get.valid ||
+    s3.io_pipeOut.get.valid ||
+    s4.io_pipeIn.get.valid ||
+    s3.io.stout.toRob.valid ||
+    s3.io.vecstout.valid
+  val utilInputFire = io.stin.fire || io.vecstin.fire || io.prefetchReq.fire || s1.io.unalignTail.fire
+  val utilWbFire = s3.io.stout.toRob.fire || s3.io.vecstout.fire
+  val utilWbBlocked = s3.io.vecstout.valid && !s3.io.vecstout.ready
+  XSPerfAccumulate("util_busy_cycle", utilPipeBusy)
+  XSPerfAccumulate("util_idle_cycle", !utilPipeBusy)
+  XSPerfAccumulate("util_input_valid", utilInputValid)
+  XSPerfAccumulate("util_input_fire", utilInputFire)
+  XSPerfAccumulate("util_input_blocked", utilInputValid && !utilInputFire)
+  XSPerfAccumulate("util_scalar_fire", io.stin.fire)
+  XSPerfAccumulate("util_vector_fire", io.vecstin.fire)
+  XSPerfAccumulate("util_prefetch_fire", io.prefetchReq.fire)
+  XSPerfAccumulate("util_unalign_tail_fire", s1.io.unalignTail.fire)
+  XSPerfAccumulate("util_dcache_req_stall", io.dcache.req.valid && !io.dcache.req.ready)
+  XSPerfAccumulate("util_tlb_req_stall", io.tlb.req.valid && !io.tlb.req.ready)
+  XSPerfAccumulate("util_scalar_wb_fire", s3.io.stout.toRob.fire)
+  XSPerfAccumulate("util_vector_wb_fire", s3.io.vecstout.fire)
+  XSPerfAccumulate("util_wb_fire", utilWbFire)
+  XSPerfAccumulate("util_wb_blocked", utilWbBlocked)
 }
 
 class DelayPipeline[T <: Data](gen: T, numDelays: Int, killFn: (T, ValidIO[Redirect]) => Bool)(implicit p: Parameters) extends XSModule {
