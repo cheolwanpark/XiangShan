@@ -4,6 +4,59 @@ This file tracks the utilization counters added around `ad35965` and `61cc282`, 
 
 Perf counters here are `XSPerfAccumulate` counters unless noted otherwise. They accumulate within the current perf dump window. Ratios should use counters from the same window. Repeated names such as `util_busy_cycle` are expected; perf logs include the module path prefix, so the module instance disambiguates them.
 
+## Perf dump output format
+
+`XSPerf*` counters are printed through `XSLog` at perf dump time. The exact line format is:
+
+```text
+[PERF ][time=<timer>] <module-path>: <counter>, <value>
+```
+
+The module path is part of the key. Do not flatten on `<counter>` alone, because names such as `util_busy_cycle` intentionally appear in many modules.
+
+Counter helpers expand as follows:
+
+- `XSPerfAccumulate("name", inc)` prints `name, <accumulated value>`.
+- `XSPerfReference("name", value)` prints `name, <current value>`.
+- `XSPerfMax("name", value, enable)` prints `name_max, <max value>`.
+- `XSPerfHistogram("name", value, enable, start, stop, step)` prints summary counters `name_sum`, `name_mean`, `name_sampled`, `name_underflow`, `name_overflow`, plus bins named `name_<bin-start>_<bin-stop>`.
+
+`DifftestPerf` lines use a different prefix:
+
+```text
+[DIFFTEST_PERF][time=<timer>] <counter>, <value>
+```
+
+Those are difftest-side counters, not the XSPerf utilization counters listed below.
+
+## Extracting from perf dumps
+
+Typical simulation logs contain the perf dump lines in `build/simv.log`. Filter XSPerf lines with:
+
+```sh
+rg '^\[PERF \]\[time=' build/simv.log
+```
+
+To extract `time`, `module`, `counter`, and `value` as tab-separated fields:
+
+```sh
+perl -ne 'print "$1\t$2\t$3\t$4\n" if /^\[PERF \]\[time=(\d+)\] ([^:]+): ([^,]+),\s*(\d+)/' build/simv.log
+```
+
+Use the tuple `(time, module, counter)` to select raw values, then calculate ratios from rows with the same `time` and `module`. For example, for a load unit module path:
+
+```text
+utilization       = util_busy_cycle / (util_busy_cycle + util_idle_cycle)
+input accept rate = util_input_fire / util_input_valid
+input block rate  = util_input_blocked / util_input_valid
+```
+
+Perf dump windows are controlled by the simulator:
+
+- `--stat-cycles=N` dumps and then cleans counters every `N` cycles.
+- `--warmup-instr=N` dumps and then cleans counters when warmup completes.
+- Final simulator stats call `trigger_stat_dump()`, which dumps once without cleaning.
+
 ## Already ready or calculatable
 
 | Area | Counters | Calculatable stats |
@@ -39,4 +92,4 @@ Perf counters here are `XSPerfAccumulate` counters unless noted otherwise. They 
 - Average occupancy = `util_allocated_entries / cycles`.
 - State residency = `state_${name} / sum(state_*)`.
 
-Use zero-denominator guards in scripts when a source or state has no samples in a window.
+Use zero-denominator guards in scripts when a source or state has no samples in a window. Always calculate with counters from the same perf dump `time` and the same module path.
